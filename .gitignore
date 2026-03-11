@@ -1,0 +1,20 @@
+# Python environment and cache
+.venv/
+__pycache__/
+*.pyc
+
+# Azure local secrets
+local.settings.json
+
+# VS Code specific settings
+.vscode/
+
+# Ignore OS-generated files
+.DS_Store
+Thumbs.db
+
+# Azurite local storage
+__azurite_db_*
+__blobstorage__/
+__queuestorage__/
+__tablestorage__/
