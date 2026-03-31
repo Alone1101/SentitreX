@@ -54,3 +54,43 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
 
     except Exception as e:
         logging.error(f"Error during scraping: {str(e)}")
+
+@app.timer_trigger(schedule="30 */15 * * * *", arg_name="mytimer", run_on_startup=True)
+@app.cosmos_db_output(arg_name="outputDocument", 
+                      database_name="sentitrex-market-db", 
+                      container_name="priceSnapshots", 
+                      connection="CosmosDbConnectionString")
+def price_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.Document]) -> None:
+    api_key = os.getenv("ALPHA_VANTAGE_KEY")
+    symbol = "SOXL"
+    
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
+    
+    try:
+        response = requests.get(url)
+        data = response.json()
+        quote = data.get("Global Quote", {})
+        
+        if not quote:
+            logging.warning("No price data found. (Check Alpha Vantage API limits!)")
+            return
+
+        now_str = datetime.datetime.utcnow().isoformat()
+        safe_id = f"{symbol}-{now_str}".replace(":", "-").replace(".", "-")
+
+        doc = {
+            "id": safe_id,
+            "ticker": symbol,
+            "priceTimestamp": now_str,
+            "openPrice": float(quote.get("02. open", 0)),
+            "highPrice": float(quote.get("03. high", 0)),
+            "lowPrice": float(quote.get("04. low", 0)),
+            "closePrice": float(quote.get("05. price", 0)),
+            "volume": int(quote.get("06. volume", 0))
+        }
+        
+        outputDocument.set(func.Document.from_dict(doc))
+        logging.info(f"Successfully saved price snapshot for {symbol}: ${doc['closePrice']}")
+
+    except Exception as e:
+        logging.error(f"Error during price scraping: {str(e)}")
