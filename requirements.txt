@@ -3,3 +3,6 @@ requests
 azure-cosmos
 streamlit
 pandas
+bycrypt
+PyJWT
+yfinance
