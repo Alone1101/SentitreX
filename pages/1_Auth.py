@@ -1,21 +1,44 @@
 import streamlit as st
+import requests
 
 st.set_page_config(page_title="SentitreX | Auth", page_icon="📈")
-
-# State Definition
-if "auth_busy" not in st.session_state:
-    st.session_state.auth_busy = False
+BASE_URL = "http://localhost:7071/api"
 
 if "pending_auth_action" not in st.session_state:
     st.session_state.pending_auth_action = None
 
-# Auth Logic
+if "auth_busy" not in st.session_state:
+    st.session_state.auth_busy = False
+
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "login"
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# State Definition
 if st.session_state.pending_auth_action == "login":
     st.session_state.auth_busy = True
     with st.spinner("Signing in..."):
-        # auth check add on from here later
-        st.session_state.authenticated = True
-        st.session_state.user_email = st.session_state.get("pending_email", "")
+        payload = {
+            "email": st.session_state.pending_email,
+            "password": st.session_state.get("pending_password")
+        }
+        try:
+            response = requests.post(f"{BASE_URL}/login", json=payload)
+            
+            if response.status_code == 200:
+                data = response.json()
+                st.session_state.authenticated = True
+                st.session_state.user_role = data.get("role")
+                st.session_state.user_token = data.get("token")
+                st.session_state.user_email = st.session_state.pending_email
+                st.success("Login Successful!")
+            else:
+                st.error(f"Login Failed: {response.json().get('error')}")
+        except Exception as e:
+            st.error(f"Could not connect to backend: {e}")
+
     st.session_state.pending_auth_action = None
     st.session_state.auth_busy = False
     st.rerun()
@@ -23,9 +46,23 @@ if st.session_state.pending_auth_action == "login":
 elif st.session_state.pending_auth_action == "register":
     st.session_state.auth_busy = True
     with st.spinner("Creating account..."):
-        # DB logic add here later
-        st.session_state.auth_mode = "login"
-        st.session_state.auth_success_message = "Account created successfully. Please log in."
+        payload = {
+            "email": st.session_state.pending_register_email,
+            "password": st.session_state.get("pending_password"),
+            "fullName": st.session_state.pending_register_name,
+            "role": "user"
+        }
+        try:
+            response = requests.post(f"{BASE_URL}/register", json=payload)
+            
+            if response.status_code == 201:
+                st.session_state.auth_mode = "login"
+                st.session_state.auth_success_message = "Account created! Please log in."
+            else:
+                st.error(f"Registration Failed: {response.json().get('error')}")
+        except Exception as e:
+            st.error(f"Could not connect to backend: {e}")
+
     st.session_state.pending_auth_action = None
     st.session_state.auth_busy = False
     st.rerun()
@@ -99,6 +136,7 @@ with center:
 
         if st.button("Log in", use_container_width=True, disabled=st.session_state.auth_busy):
             st.session_state.pending_email = email
+            st.session_state.pending_password = password
             st.session_state.pending_auth_action = "login"
             st.session_state.auth_busy = True
             st.rerun()
@@ -143,6 +181,7 @@ with center:
         if st.button("Create Account", use_container_width=True, disabled=st.session_state.auth_busy):
             st.session_state.pending_register_name = full_name
             st.session_state.pending_register_email = email
+            st.session_state.pending_password = password
             st.session_state.pending_auth_action = "register"
             st.session_state.auth_busy = True
             st.rerun()
