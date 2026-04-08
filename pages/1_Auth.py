@@ -1,8 +1,9 @@
 import streamlit as st
 import requests
+import os
 
 st.set_page_config(page_title="SentitreX | Auth", page_icon="📈")
-BASE_URL = "http://localhost:7071/api"
+BASE_URL = os.getenv("SENTITREX_API_BASE_URL", "http://localhost:7071/api")
 
 if "pending_auth_action" not in st.session_state:
     st.session_state.pending_auth_action = None

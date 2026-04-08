@@ -12,6 +12,38 @@ import yfinance as yf
 
 app = func.FunctionApp()
 
+
+def _get_jwt_secret() -> str:
+    secret = os.getenv("JWT_SECRET")
+    if not secret:
+        raise ValueError("JWT_SECRET is not configured.")
+    return secret
+
+
+def _require_jwt(req: func.HttpRequest) -> dict:
+    auth_header = req.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise PermissionError("Missing or invalid Authorization header.")
+
+    token = auth_header[len("Bearer ") :].strip()
+    if not token:
+        raise PermissionError("Missing bearer token.")
+
+    secret_key = _get_jwt_secret()
+    return jwt.decode(token, secret_key, algorithms=["HS256"])
+
+
+def _get_cosmos_container(container_name: str):
+    conn_str = os.getenv("CosmosDbConnectionString")
+    if not conn_str:
+        raise ValueError("CosmosDbConnectionString is not configured.")
+
+    from azure.cosmos import CosmosClient
+
+    client = CosmosClient.from_connection_string(conn_str)
+    database = client.get_database_client("sentitrex-market-db")
+    return database.get_container_client(container_name)
+
 # Changed schedule to every hour at minute 0, second 0
 @app.timer_trigger(schedule="0 0 * * * *", arg_name="mytimer", run_on_startup=True)
 @app.cosmos_db_output(arg_name="outputDocument", 
@@ -128,7 +160,7 @@ def register_user(req: func.HttpRequest) -> func.HttpResponse:
         email = req_body.get('email')
         password = req_body.get('password')
         full_name = req_body.get('fullName', 'New User')
-        role = req_body.get('role', 'user')
+        role = "user"
 
         if not email or not password:
             return func.HttpResponse(
@@ -138,11 +170,7 @@ def register_user(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         # 2. Connect to Cosmos DB
-        conn_str = os.getenv("CosmosDbConnectionString")
-        from azure.cosmos import CosmosClient
-        client = CosmosClient.from_connection_string(conn_str)
-        database = client.get_database_client("sentitrex-market-db")
-        container = database.get_container_client("users")
+        container = _get_cosmos_container("users")
 
         # 3. Check if email already exists
         query = "SELECT * FROM c WHERE c.email = @email"
@@ -217,11 +245,7 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         # 2. Connect to Cosmos DB
-        conn_str = os.getenv("CosmosDbConnectionString")
-        from azure.cosmos import CosmosClient
-        client = CosmosClient.from_connection_string(conn_str)
-        database = client.get_database_client("sentitrex-market-db")
-        container = database.get_container_client("users")
+        container = _get_cosmos_container("users")
 
         # 3. Find the user by email
         query = "SELECT * FROM c WHERE c.email = @email"
@@ -251,7 +275,7 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
              )
 
         # 5. Mint the JWT if passwords match
-        secret_key = os.getenv("JWT_SECRET", "fallback-secret-if-missing")
+        secret_key = _get_jwt_secret()
         
         # Grab UserID
         user_id = user.get('UserID') 
@@ -283,4 +307,120 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
             json.dumps({"error": "Internal server error during login."}), 
             status_code=500, 
             mimetype="application/json"
+        )
+
+
+@app.route(route="news", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
+def get_news(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        _require_jwt(req)
+
+        news_container = _get_cosmos_container("newsArticles")
+        query = """
+            SELECT TOP 200
+                c.title,
+                c.sourceName,
+                c.publishedAt,
+                c.articleUrl,
+                c.sentiment.sentimentScore,
+                c.sentiment.sentimentLabel
+            FROM c
+            WHERE c.ticker = 'SOXL'
+            ORDER BY c.publishedAt DESC
+        """
+        items = list(
+            news_container.query_items(
+                query=query,
+                enable_cross_partition_query=False,
+                partition_key="SOXL",
+            )
+        )
+
+        return func.HttpResponse(
+            json.dumps(items),
+            status_code=200,
+            mimetype="application/json",
+        )
+    except PermissionError:
+        return func.HttpResponse(
+            json.dumps({"error": "Unauthorized"}),
+            status_code=401,
+            mimetype="application/json",
+        )
+    except jwt.ExpiredSignatureError:
+        return func.HttpResponse(
+            json.dumps({"error": "Token expired"}),
+            status_code=401,
+            mimetype="application/json",
+        )
+    except jwt.InvalidTokenError:
+        return func.HttpResponse(
+            json.dumps({"error": "Invalid token"}),
+            status_code=401,
+            mimetype="application/json",
+        )
+    except Exception as e:
+        logging.error(f"get_news error: {str(e)}")
+        return func.HttpResponse(
+            json.dumps({"error": "Internal server error"}),
+            status_code=500,
+            mimetype="application/json",
+        )
+
+
+@app.route(route="prices", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
+def get_prices(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        _require_jwt(req)
+
+        price_container = _get_cosmos_container("priceSnapshots")
+        query = """
+            SELECT TOP 500
+                c.priceTimestamp,
+                c.openPrice,
+                c.highPrice,
+                c.lowPrice,
+                c.closePrice,
+                c.volume
+            FROM c
+            WHERE c.ticker = 'SOXL'
+            ORDER BY c.priceTimestamp ASC
+        """
+        items = list(
+            price_container.query_items(
+                query=query,
+                enable_cross_partition_query=False,
+                partition_key="SOXL",
+            )
+        )
+
+        return func.HttpResponse(
+            json.dumps(items),
+            status_code=200,
+            mimetype="application/json",
+        )
+    except PermissionError:
+        return func.HttpResponse(
+            json.dumps({"error": "Unauthorized"}),
+            status_code=401,
+            mimetype="application/json",
+        )
+    except jwt.ExpiredSignatureError:
+        return func.HttpResponse(
+            json.dumps({"error": "Token expired"}),
+            status_code=401,
+            mimetype="application/json",
+        )
+    except jwt.InvalidTokenError:
+        return func.HttpResponse(
+            json.dumps({"error": "Invalid token"}),
+            status_code=401,
+            mimetype="application/json",
+        )
+    except Exception as e:
+        logging.error(f"get_prices error: {str(e)}")
+        return func.HttpResponse(
+            json.dumps({"error": "Internal server error"}),
+            status_code=500,
+            mimetype="application/json",
         )

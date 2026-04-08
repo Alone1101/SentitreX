@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import html as html_lib
-
-from azure.cosmos import CosmosClient
+import requests
+import os
 
 # Auth Check
 if not st.session_state.get("authenticated", False):
@@ -23,7 +23,7 @@ if st.session_state.pending_logout:
         st.session_state.authenticated = False
         st.session_state.auth_mode = "login"
 
-        for key in ["user_email", "user_name", "auth_token"]:
+        for key in ["user_email", "user_name", "user_token", "user_role"]:
             if key in st.session_state:
                 del st.session_state[key]
 
@@ -196,48 +196,34 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATABASE CONNECTION ---
-ENDPOINT = "https://sentitex-db.documents.azure.com:443/"
-KEY = "TVBDiQoL18VIEf9Bwf35mNtWhSppYRDX560vKadGYIqfpVeJbwAuZ20npVj6UakPivTQkeNNBIYCACDbAO4omA=="
+BASE_URL = os.getenv("SENTITREX_API_BASE_URL", "http://localhost:7071/api")
 
-@st.cache_resource
-def init_connection():
-    return CosmosClient(ENDPOINT, credential=KEY)
-
-try:
-    client = init_connection()
-    database = client.get_database_client("sentitrex-market-db")
-    
-    # Connect to Both containers
-    news_container = database.get_container_client("newsArticles")
-    price_container = database.get_container_client("priceSnapshots")
-except Exception as e:
-    st.error(f"Database connection failed: {e}")
-    st.stop()
+def _auth_headers() -> dict:
+    token = st.session_state.get("user_token")
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
 
 # --- 3. DATA FETCHING ---
 @st.cache_data(ttl=300) # Cache the data for 5 minutes
 def fetch_sentiment_data():
-    query = """
-        SELECT c.title, c.sourceName, c.publishedAt, c.sentiment.sentimentScore, c.sentiment.sentimentLabel 
-        FROM c 
-        WHERE c.ticker = 'SOXL'
-    """
-    items = list(news_container.query_items(query=query, enable_cross_partition_query=False, partition_key="SOXL"))
-    return pd.DataFrame(items)
+    resp = requests.get(f"{BASE_URL}/news", headers=_auth_headers(), timeout=15)
+    if resp.status_code == 401:
+        st.session_state.authenticated = False
+        st.session_state.auth_mode = "login"
+        st.rerun()
+    resp.raise_for_status()
+    return pd.DataFrame(resp.json())
 
 @st.cache_data(ttl=300) 
 def fetch_price_data():
-    query = """
-        SELECT c.priceTimestamp, c.openPrice, c.highPrice, c.lowPrice, c.closePrice, c.volume
-        FROM c 
-        WHERE c.ticker = 'SOXL'
-    """
-    items = list(price_container.query_items(
-        query=query, 
-        enable_cross_partition_query=False, 
-        partition_key="SOXL"))
-    return pd.DataFrame(items)
+    resp = requests.get(f"{BASE_URL}/prices", headers=_auth_headers(), timeout=15)
+    if resp.status_code == 401:
+        st.session_state.authenticated = False
+        st.session_state.auth_mode = "login"
+        st.rerun()
+    resp.raise_for_status()
+    return pd.DataFrame(resp.json())
 
 # --- 4. LOAD DATA ---
 with st.spinner("Fetching latest market data..."):

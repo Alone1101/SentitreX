@@ -39,10 +39,13 @@ Create a `local.settings.json` file in the root directory to store your API keys
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "python",
     "ALPHA_VANTAGE_KEY": "YOUR_API_KEY",
-    "CosmosDbConnectionString": "YOUR_COSMOS_CONNECTION_STRING"
+    "CosmosDbConnectionString": "YOUR_COSMOS_CONNECTION_STRING",
+    "JWT_SECRET": "CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
   }
 }
 ```
+
+Optional (Streamlit): you can override the backend URL via `SENTITREX_API_BASE_URL` (defaults to `http://localhost:7071/api`).
 
 ## 4. How to Run Locally
 
