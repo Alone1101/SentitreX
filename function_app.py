@@ -1,3 +1,4 @@
+import re
 import azure.functions as func
 import logging
 import requests
@@ -9,16 +10,20 @@ import json
 import uuid
 import jwt
 import yfinance as yf
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 
 app = func.FunctionApp()
 
+# Key vault setup
+KEY_VAULT_URL = os.getenv("KEY_VAULT_URL")
+credential = DefaultAzureCredential()
+secret_client = SecretClient(vault_url=KEY_VAULT_URL, credential=credential) if KEY_VAULT_URL else None
 
 def _get_jwt_secret() -> str:
-    secret = os.getenv("JWT_SECRET")
-    if not secret:
-        raise ValueError("JWT_SECRET is not configured.")
-    return secret
-
+    if secret_client:
+        return secret_client.get_secret("JWT-SECRET").value
+    raise ValueError("KEY_VAULT_URL is not configured.")
 
 def _require_jwt(req: func.HttpRequest) -> dict:
     auth_header = req.headers.get("Authorization", "")
@@ -32,14 +37,12 @@ def _require_jwt(req: func.HttpRequest) -> dict:
     secret_key = _get_jwt_secret()
     return jwt.decode(token, secret_key, algorithms=["HS256"])
 
-
 def _get_cosmos_container(container_name: str):
-    conn_str = os.getenv("CosmosDbConnectionString")
-    if not conn_str:
-        raise ValueError("CosmosDbConnectionString is not configured.")
+    if not secret_client:
+        raise ValueError("KEY_VAULT_URL is not configured.")
 
+    conn_str = secret_client.get_secret("COSMOS-CONNECTION-STRING").value
     from azure.cosmos import CosmosClient
-
     client = CosmosClient.from_connection_string(conn_str)
     database = client.get_database_client("sentitrex-market-db")
     return database.get_container_client(container_name)
@@ -51,7 +54,9 @@ def _get_cosmos_container(container_name: str):
                       container_name="newsArticles", 
                       connection="CosmosDbConnectionString")
 def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.Document]) -> None:
-    api_key = os.getenv("ALPHA_VANTAGE_KEY")
+    if not secret_client:
+        raise ValueError("KEY_VAULT_URL is not configured.")
+    api_key = secret_client.get_secret("ALPHA-VANTAGE-KEY").value
     symbol = "SOXL"
     url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&apikey={api_key}"
     
@@ -165,6 +170,23 @@ def register_user(req: func.HttpRequest) -> func.HttpResponse:
         if not email or not password:
             return func.HttpResponse(
                 json.dumps({"error": "Email and password are required."}), 
+                status_code=400, 
+                mimetype="application/json"
+            )
+
+        # Check email format using regex
+        email_regex = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+        if not re.match(email_regex, email):
+            return func.HttpResponse(
+                json.dumps({"error": "Invalid email format."}), 
+                status_code=400, 
+                mimetype="application/json"
+            )
+            
+        # Check password strength
+        if len(password) < 8:
+            return func.HttpResponse(
+                json.dumps({"error": "Password must be at least 8 characters long."}), 
                 status_code=400, 
                 mimetype="application/json"
             )
