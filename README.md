@@ -38,9 +38,7 @@ Create a `local.settings.json` file in the root directory to store your API keys
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "python",
-    "ALPHA_VANTAGE_KEY": "YOUR_API_KEY",
-    "CosmosDbConnectionString": "YOUR_COSMOS_CONNECTION_STRING",
-    "JWT_SECRET": "CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
+    "KEY_VAULT_URL": "https://sentitrex-keyvault.vault.azure.net/"
   }
 }
 ```
@@ -68,3 +66,19 @@ Make sure your virtual environment is activated, then run:
 ```powershell
 streamlit run app.py
 ```
+
+## 5. Cloud Architecture & Tech Stack
+
+SentitreX leverages a decoupled, serverless microservices architecture:
+
+- **Compute:** Azure Functions (Serverless Python backend)
+- **Database:** Azure Cosmos DB (NoSQL Document Store)
+- **Security:** Azure Key Vault (Managed Identity secret injection) & bcrypt/JWT authentication
+- **Frontend:** Streamlit (Python-based data visualization)
+- **Monitoring:** Azure Application Insights
+
+## 6. Security Implementation
+
+- **Azure Key Vault:** No plain-text credentials exist in the codebase. All connection strings and API keys are fetched dynamically at runtime via Azure Managed Identities.
+- **Authentication:** Users are securely registered with `bcrypt` password hashing.
+- **Authorization:** API endpoints (`/news`, `/prices`) are protected via stateless JSON Web Tokens (JWT) requiring Bearer token validation.
