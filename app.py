@@ -7,6 +7,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+if "api_url" not in st.session_state:
+    st.session_state.api_url = "https://sentitrex-api-bmf6dvdchabkcedx.malaysiawest-01.azurewebsites.net/api"
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 

@@ -196,7 +196,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-BASE_URL = os.getenv("SENTITREX_API_BASE_URL", "http://localhost:7071/api")
+BASE_URL = st.session_state.get("api_url", "https://sentitrex-api-bmf6dvdchabkcedx.malaysiawest-01.azurewebsites.net/api")
 
 def _auth_headers() -> dict:
     token = st.session_state.get("user_token")

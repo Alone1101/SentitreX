@@ -3,7 +3,7 @@ import requests
 import os
 
 st.set_page_config(page_title="SentitreX | Auth", page_icon="📈")
-BASE_URL = os.getenv("SENTITREX_API_BASE_URL", "http://localhost:7071/api")
+BASE_URL = st.session_state.get("api_url", "https://sentitrex-api-bmf6dvdchabkcedx.malaysiawest-01.azurewebsites.net/api")
 
 if "pending_auth_action" not in st.session_state:
     st.session_state.pending_auth_action = None
@@ -42,7 +42,7 @@ if st.session_state.pending_auth_action == "login":
 
     st.session_state.pending_auth_action = None
     st.session_state.auth_busy = False
-    st.rerun()
+    #st.rerun()
 
 elif st.session_state.pending_auth_action == "register":
     st.session_state.auth_busy = True
@@ -66,7 +66,7 @@ elif st.session_state.pending_auth_action == "register":
 
     st.session_state.pending_auth_action = None
     st.session_state.auth_busy = False
-    st.rerun()
+    #st.rerun()
 
 st.markdown("""
 <style>
