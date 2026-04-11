@@ -23,7 +23,7 @@ jobs:
         uses: Azure/functions-action@v1
         with:
           app-name: 'sentitrex-api'
-          package: '.'  # This tells Azure to look for function_app.py right here
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }} # Use your clean secret name
+          package: '.'
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_F9B4454536E94220808D4F0923B860C9 }}
           scm-do-build-during-deployment: true
           enable-oryx-build: true
