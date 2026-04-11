@@ -205,25 +205,47 @@ def _auth_headers() -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 # --- 3. DATA FETCHING ---
-@st.cache_data(ttl=300) # Cache the data for 5 minutes
+@st.cache_data(ttl=300) 
 def fetch_sentiment_data():
-    resp = requests.get(f"{BASE_URL}/news", headers=_auth_headers(), timeout=15)
-    if resp.status_code == 401:
-        st.session_state.authenticated = False
-        st.session_state.auth_mode = "login"
-        st.rerun()
-    resp.raise_for_status()
-    return pd.DataFrame(resp.json())
+    try:
+        resp = requests.get(f"{BASE_URL}/news", headers=_auth_headers(), timeout=15)
+        
+        if resp.status_code == 401:
+            st.session_state.authenticated = False
+            st.session_state.auth_mode = "login"
+            st.rerun()
+
+        # Check if the response actually has text before parsing JSON
+        if resp.status_code == 200 and resp.text.strip():
+            return pd.DataFrame(resp.json())
+        else:
+            st.warning("Backend is currently updating. Showing empty dataset for now.")
+            return pd.DataFrame() # Return empty DF instead of crashing
+            
+    except Exception as e:
+        st.error(f"Connection failed: {e}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=300) 
 def fetch_price_data():
-    resp = requests.get(f"{BASE_URL}/prices", headers=_auth_headers(), timeout=15)
-    if resp.status_code == 401:
-        st.session_state.authenticated = False
-        st.session_state.auth_mode = "login"
-        st.rerun()
-    resp.raise_for_status()
-    return pd.DataFrame(resp.json())
+    try:
+        resp = requests.get(f"{BASE_URL}/prices", headers=_auth_headers(), timeout=15)
+        
+        if resp.status_code == 401:
+            st.session_state.authenticated = False
+            st.session_state.auth_mode = "login"
+            st.rerun()
+
+        # Check if the response actually has text before parsing JSON
+        if resp.status_code == 200 and resp.text.strip():
+            return pd.DataFrame(resp.json())
+        else:
+            st.warning("📈 Market API is waking up. Please refresh in 30 seconds.")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        st.error(f"Price data fetch error: {e}")
+        return pd.DataFrame()
 
 # --- 4. LOAD DATA ---
 with st.spinner("Fetching latest market data..."):
