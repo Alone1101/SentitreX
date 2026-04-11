@@ -56,9 +56,14 @@ def _get_cosmos_container(container_name: str):
 def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.Document]) -> None:
     if not secret_client:
         raise ValueError("KEY_VAULT_URL is not configured.")
+    
     api_key = secret_client.get_secret("ALPHA-VANTAGE-KEY").value
     symbol = "SOXL"
-    time_limit = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime("%Y%m%dT%H%M") # Time filter
+    
+    # Time filter
+    # Calculate cutoff for the last 24 hours in Alpha Vantage format: YYYYMMDDTHHMM
+    time_limit = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime("%Y%m%dT%H%M")
+    
     url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&time_from={time_limit}&apikey={api_key}"
     
     try:
@@ -67,34 +72,35 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
         news_items = data.get("feed", [])
         
         if not news_items:
-            logging.warning("No news items found in Alpha Vantage response.")
+            logging.warning(f"No fresh news items found for {symbol} in the last 24h.")
             return
 
         processed_articles = []
         for article in news_items:
-
             # Relevance filter
-            ticker_data = article.get("ticker_sentiment", [])
-            relevance = next((float(t.get("relevance_score", 0)) for t in ticker_data if t.get("ticker") == symbol), 0)
+            ticker_sentiment = article.get("ticker_sentiment", [])
+            relevance = next((float(t.get("relevance_score", 0)) for t in ticker_sentiment if t.get("ticker") == symbol), 0)
 
-            # Skip if the article is barely about SOXL
+            # Skip articles where SOXL is a minor mention
             if relevance < 0.4:
                 continue
 
+            # Idempotency & Data integrity
             raw_url = article.get("url", "")
+            # Generate MD5 hash of URL to prevent duplicate entries 
             safe_id = hashlib.md5(raw_url.encode('utf-8')).hexdigest() if raw_url else "unknown-id"
 
             doc = {
                 "id": safe_id,
                 "articleId": safe_id,
-                "ticker": "SOXL",
+                "ticker": symbol,
                 "sourceName": article.get("source"),
                 "title": article.get("title"),
                 "articleUrl": raw_url,
-                "publishedAt": article.get("time_published"),
+                "publishedAt": article.get("time_published"), # Use actual news time for correlation
                 "sentiment": {
                     "sentimentScore": float(article.get("overall_sentiment_score", 0)),
-                    "relevanceScore": float(article.get("relevance_score", 0)),
+                    "relevanceScore": relevance,
                     "sentimentLabel": article.get("overall_sentiment_label"),
                     "sentimentTimestamp": datetime.datetime.utcnow().isoformat()
                 }
@@ -102,11 +108,12 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
             processed_articles.append(func.Document.from_dict(doc))
         
         if processed_articles:
+            # Batch save to Cosmos DB via output binding
             outputDocument.set(processed_articles)
-            logging.info(f"Successfully saved {len(processed_articles)} articles.")
+            logging.info(f"Successfully saved {len(processed_articles)} relevant news articles.")
 
     except Exception as e:
-        logging.error(f"Error during scraping: {str(e)}")
+        logging.error(f"Error during sentiment scraping: {str(e)}")
 
 # Changed schedule to every 5 minutes per hour, second 30
 @app.timer_trigger(schedule="30 0/12 * * * *", arg_name="mytimer", run_on_startup=True)
