@@ -58,7 +58,8 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
         raise ValueError("KEY_VAULT_URL is not configured.")
     api_key = secret_client.get_secret("ALPHA-VANTAGE-KEY").value
     symbol = "SOXL"
-    url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&apikey={api_key}"
+    time_limit = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime("%Y%m%dT%H%M") # Time filter
+    url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&time_from={time_limit}&apikey={api_key}"
     
     try:
         response = requests.get(url)
@@ -71,6 +72,15 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
 
         processed_articles = []
         for article in news_items:
+
+            # Relevance filter
+            ticker_data = article.get("ticker_sentiment", [])
+            relevance = next((float(t.get("relevance_score", 0)) for t in ticker_data if t.get("ticker") == symbol), 0)
+
+            # Skip if the article is barely about SOXL
+            if relevance < 0.4:
+                continue
+
             raw_url = article.get("url", "")
             safe_id = hashlib.md5(raw_url.encode('utf-8')).hexdigest() if raw_url else "unknown-id"
 
@@ -97,7 +107,6 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
 
     except Exception as e:
         logging.error(f"Error during scraping: {str(e)}")
-
 
 # Changed schedule to every 5 minutes per hour, second 30
 @app.timer_trigger(schedule="30 0/12 * * * *", arg_name="mytimer", run_on_startup=True)
@@ -152,7 +161,6 @@ def price_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.Docu
 
     except Exception as e:
         logging.error(f"Error during price scraping: {str(e)}")
-
 
 @app.route(route="register", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
 def register_user(req: func.HttpRequest) -> func.HttpResponse:
@@ -247,7 +255,6 @@ def register_user(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
-
 @app.route(route="login", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
 def login_user(req: func.HttpRequest) -> func.HttpResponse:
     import logging
@@ -331,7 +338,6 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
-
 @app.route(route="news", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
 def get_news(req: func.HttpRequest) -> func.HttpResponse:
     try:
@@ -388,7 +394,6 @@ def get_news(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500,
             mimetype="application/json",
         )
-
 
 @app.route(route="prices", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
 def get_prices(req: func.HttpRequest) -> func.HttpResponse:
