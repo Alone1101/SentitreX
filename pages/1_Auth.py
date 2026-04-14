@@ -66,7 +66,7 @@ elif st.session_state.pending_auth_action == "register":
 
     st.session_state.pending_auth_action = None
     st.session_state.auth_busy = False
-    #st.rerun()
+    st.rerun()
 
 st.markdown("""
 <style>
