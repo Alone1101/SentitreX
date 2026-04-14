@@ -220,7 +220,7 @@ def fetch_sentiment_data():
             return pd.DataFrame(resp.json())
         else:
             st.warning("Backend is currently updating. Showing empty dataset for now.")
-            return pd.DataFrame() # Return empty DF instead of crashing
+            return pd.DataFrame() 
             
     except Exception as e:
         st.error(f"Connection failed: {e}")
@@ -322,146 +322,124 @@ if headline_ticker_html:
     st.markdown("##### Live Headlines")
     st.html(headline_ticker_html)
 
-# --- 8. TABS ---
-market_tab, sentiment_tab = st.tabs(["Market Price", "Sentiment"])
+# --- 8. UNIFIED DASHBOARD ---
+st.subheader("SOXL Market & Sentiment Overview")
 
-with market_tab:
-    st.subheader("SOXL Market Price")
+if not df_price.empty:
+    # 1. Calculate Market Metrics
+    latest_price = df_price.iloc[-1]["closePrice"]
+    latest_open = df_price.iloc[-1]["openPrice"]
+    latest_high = df_price.iloc[-1]["highPrice"]
+    latest_low = df_price.iloc[-1]["lowPrice"]
+    latest_volume = df_price.iloc[-1]["volume"]
+    latest_timestamp = df_price.iloc[-1]["priceTimestamp"]
 
-    if not df_price.empty:
-        latest_price = df_price.iloc[-1]["closePrice"]
-        latest_open = df_price.iloc[-1]["openPrice"]
-        latest_high = df_price.iloc[-1]["highPrice"]
-        latest_low = df_price.iloc[-1]["lowPrice"]
-        latest_volume = df_price.iloc[-1]["volume"]
-        latest_timestamp = df_price.iloc[-1]["priceTimestamp"]
+    day_change = latest_price - latest_open
+    day_change_pct = (day_change / latest_open * 100) if latest_open else 0
+    
+    # 2. Calculate Sentiment Metrics
+    avg_score = df_sentiment["sentimentScore"].mean() if not df_sentiment.empty else 0
+    dominant_trend = "Bullish" if avg_score > 0.15 else "Bearish" if avg_score < -0.15 else "Neutral"
 
-        day_change = latest_price - latest_open
-        day_change_pct = (day_change / latest_open * 100) if latest_open else 0
+    # 3. Display Top Metrics Row
+    m1, m2, m3, m4, m5 = st.columns(5)
 
-        intraday_range_pct = ((latest_high - latest_low) / latest_open * 100) if latest_open else 0
+    with m1:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Last Price", f"${latest_price:.2f}", f"{day_change_pct:+.2f}%")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        status_text = f"SOXL ${latest_price:.2f} ({day_change_pct:+.2f}%)"
-        st.caption(status_text)
+    with m2:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Volume", f"{int(latest_volume):,}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
+    with m3:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Intraday High/Low", f"${latest_high:.2f} / ${latest_low:.2f}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        with m1:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Last Price", f"${latest_price:.2f}")
-            st.markdown('</div>', unsafe_allow_html=True)
+    with m4:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Avg Sentiment Score", f"{avg_score:.2f}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        with m2:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Session Change", f"{day_change:+.2f}", f"{day_change_pct:+.2f}%")
-            st.markdown('</div>', unsafe_allow_html=True)
+    with m5:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Dominant Trend", dominant_trend)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.caption(f"Last updated: {latest_timestamp.strftime('%d %b %Y %H:%M')}")
 
-        with m3:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Open", f"${latest_open:.2f}")
-            st.markdown('</div>', unsafe_allow_html=True)
+    # --- 4. BUILD COMBINED CHART ---
+    fig = go.Figure()
 
-        with m4:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Day High", f"${latest_high:.2f}")
-            st.markdown('</div>', unsafe_allow_html=True)
+    # Price Candlestick (Left Axis)
+    fig.add_trace(go.Candlestick(
+        x=df_price["priceTimestamp"],
+        open=df_price["openPrice"],
+        high=df_price["highPrice"],
+        low=df_price["lowPrice"],
+        close=df_price["closePrice"],
+        name="SOXL Price"
+    ))
 
-        with m5:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Day Low", f"${latest_low:.2f}")
-            st.markdown('</div>', unsafe_allow_html=True)
+    # Volume Bar (Bottom Axis)
+    fig.add_trace(go.Bar(
+        x=df_price["priceTimestamp"],
+        y=df_price["volume"],
+        name="SOXL Volume",
+        yaxis="y2",
+        marker=dict(
+            color="rgba(150, 150, 150, 0.4)",
+            line=dict(color="rgba(200, 200, 200, 0.8)", width=1) # The 'line' outline forces it to be visible
+        ) 
+    ))
 
-        with m6:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Volume", f"{int(latest_volume):,}")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.caption(
-            f"Updated {latest_timestamp.strftime('%d %b %Y %H:%M')}  •  "
-            f"Intraday Range: {intraday_range_pct:.2f}%"
-        )
-
-        fig = go.Figure()
-
-        fig.add_trace(go.Candlestick(
-            x=df_price["priceTimestamp"],
-            open=df_price["openPrice"],
-            high=df_price["highPrice"],
-            low=df_price["lowPrice"],
-            close=df_price["closePrice"],
-            name="SOXL Price"
-        ))
-
-        fig.add_trace(go.Bar(
-            x=df_price["priceTimestamp"],
-            y=df_price["volume"],
-            name="SOXL Volume",
-            yaxis="y2",
-            opacity=0.35
-        ))
-
-        fig.update_layout(
-            template="plotly_dark",
-            height=760,
-            xaxis_rangeslider_visible=True,
-            margin=dict(l=20, r=20, t=30, b=20),
-            yaxis=dict(title="Price", domain=[0.3, 1.0]),
-            yaxis2=dict(title="Volume", domain=[0.0, 0.22], anchor="x"),
-            legend=dict(orientation="h")
-        )
-
-        st.plotly_chart(fig, width="stretch")
-    else:
-        st.warning("No price data yet. Waiting for scraper...")
-
-with sentiment_tab:
-    st.subheader("Sentiment Timeline")
-
+    # Sentiment Line (Overlaid, Right Axis)
     if not df_sentiment.empty:
-        sentiment_chart_data = (
-            df_sentiment
-            .set_index("publishedAt")[["sentimentScore"]]
-            .sort_index()
-            .dropna()
-        )
+        fig.add_trace(go.Scatter(
+            x=df_sentiment["publishedAt"],
+            y=df_sentiment["sentimentScore"],
+            mode="lines+markers",
+            name="Sentiment Score",
+            yaxis="y3", 
+            line=dict(color="#facc15", width=2), 
+            marker=dict(size=6, color="#facc15"),
+            connectgaps=True
+        ))
 
-        if not sentiment_chart_data.empty:
-            st.line_chart(sentiment_chart_data, width="stretch")
-        else:
-            st.warning("No valid sentiment timeline data to display.")
-
-        st.markdown("### Sentiment Overview")
-        col1, col2, col3 = st.columns(3)
-        avg_score = df_sentiment["sentimentScore"].mean()
-
-        with col1:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Articles Analyzed", len(df_sentiment))
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with col2:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Average Sentiment Score", f"{avg_score:.2f}")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with col3:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric(
-                "Dominant Trend",
-                "Bullish" if avg_score > 0.15 else "Bearish" if avg_score < -0.15 else "Neutral"
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
+    # Layout & Axes Setup
+    fig.update_layout(
+        template="plotly_dark",
+        height=760,
+        xaxis_rangeslider_visible=False,
+        margin=dict(l=20, r=20, t=30, b=20),
         
-        st.markdown("### Latest Headlines")
+        yaxis=dict(title="Price", domain=[0.25, 1.0], side="left"),
+        yaxis2=dict(title="Volume", domain=[0.0, 0.20], side="left"),
+        yaxis3=dict(
+            title="Sentiment (-1 to 1)", 
+            overlaying="y", 
+            side="right",   
+            range=[-1.2, 1.2], 
+            showgrid=False  
+        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+
+    st.plotly_chart(fig, width="stretch", key="combined_market_sentiment_chart")
+
+    # --- HEADLINES TABLE ---
+    if not df_sentiment.empty:
+        st.markdown("### Latest News & Articles")
         display_df = df_sentiment.sort_values(by="publishedAt", ascending=False).copy()
         display_df["publishedAt"] = display_df["publishedAt"].dt.strftime("%Y-%m-%d %H:%M")
 
-        if not display_df.empty:
-            st.dataframe(
-                display_df[["publishedAt", "sourceName", "title", "sentimentLabel", "sentimentScore"]],
-                width="stretch"
-            )
-        else:
-            st.warning("No valid headlines to display.")
-    else:
-        st.warning("No sentiment data found. Is the scraper running?")
+        st.dataframe(
+            display_df[["publishedAt", "sourceName", "title", "sentimentLabel", "sentimentScore"]],
+            width="stretch",
+            hide_index=True
+        )
+else:
+    st.warning("No price data yet. Waiting for scraper...")
