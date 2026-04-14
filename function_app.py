@@ -133,7 +133,7 @@ def price_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.Docu
     
     try:
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="5d")
+        hist = ticker.history(period="5d", interval="15m")
         
         if hist.empty:
             logging.warning("No price data found via yfinance. (Market might be closed or on holiday)")
@@ -147,24 +147,32 @@ def price_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.Docu
             logging.warning("All recent price data was invalid (0.0 or NaN).")
             return
         
-        latest = hist.iloc[-1]
-
-        now_str = datetime.datetime.utcnow().isoformat()
-        safe_id = f"{symbol}-{now_str}".replace(":", "-").replace(".", "-")
-
-        doc = {
-            "id": safe_id,
-            "ticker": symbol,
-            "priceTimestamp": now_str,
-            "openPrice": float(latest["Open"]),
-            "highPrice": float(latest["High"]),
-            "lowPrice": float(latest["Low"]),
-            "closePrice": float(latest["Close"]),
-            "volume": int(latest["Volume"])
-        }
+        processed_prices = []
         
-        outputDocument.set(func.Document.from_dict(doc))
-        logging.info(f"Successfully saved price snapshot for {symbol}: ${doc['closePrice']}")
+        # Iterate through all historical rows and use the actual market timestamp
+        for timestamp, row in hist.iterrows():
+            # yfinance timestamps are timezone-aware. Convert to UTC string.
+            dt_str = timestamp.tz_convert('UTC').isoformat()
+            
+            # Create a unique ID based on the exact candle time
+            safe_id = f"{symbol}-{dt_str}".replace(":", "-").replace(".", "-").replace("+", "-")
+
+            doc = {
+                "id": safe_id,
+                "ticker": symbol,
+                "priceTimestamp": dt_str,
+                "openPrice": float(row["Open"]),
+                "highPrice": float(row["High"]),
+                "lowPrice": float(row["Low"]),
+                "closePrice": float(row["Close"]),
+                "volume": int(row["Volume"])
+            }
+            processed_prices.append(func.Document.from_dict(doc))
+        
+        # Output all 5 days of 15-minute candles to Cosmos DB
+        if processed_prices:
+            outputDocument.set(processed_prices)
+            logging.info(f"Successfully saved {len(processed_prices)} 15m price snapshots for {symbol}.")
 
     except Exception as e:
         logging.error(f"Error during price scraping: {str(e)}")
