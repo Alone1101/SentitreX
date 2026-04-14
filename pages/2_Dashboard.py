@@ -9,11 +9,6 @@ import html as html_lib
 import requests
 import os
 
-# Auth Check
-if not st.session_state.get("authenticated", False):
-    st.session_state.auth_mode = "login"
-    st.rerun()
-
 if "logout_busy" not in st.session_state:
     st.session_state.logout_busy = False
 
