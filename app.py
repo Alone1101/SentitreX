@@ -16,10 +16,8 @@ if "authenticated" not in st.session_state:
 if "auth_mode" not in st.session_state:
     st.session_state.auth_mode = "login"
 
-auth_page = st.Page("pages/1_Auth.py", title="Auth", icon=":material/login:")
-dashboard_page = st.Page("pages/2_Dashboard.py", title="Dashboard", icon=":material/monitoring:")
-
-pages = [dashboard_page] if st.session_state.authenticated else [auth_page]
-
-pg = st.navigation(pages, position="hidden")
-pg.run()
+# After successful login, rerun to update navigation
+if st.session_state.authenticated:
+    st.switch_page("pages/2_Dashboard.py")
+else:
+    st.switch_page("pages/1_Auth.py")
