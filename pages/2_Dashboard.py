@@ -1,4 +1,8 @@
 import streamlit as st
+
+if not st.session_state.get("authenticated", False):
+    st.switch_page("pages/1_Auth.py")
+
 import pandas as pd
 import plotly.graph_objects as go
 import html as html_lib
