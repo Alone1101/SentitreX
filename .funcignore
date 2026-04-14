@@ -1,1 +1,9 @@
+.git*
+__pycache__
 .venv
+venv
+.env
+local.settings.json
+*.pyc
+.pytest_cache
+node_modules
