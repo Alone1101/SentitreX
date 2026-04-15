@@ -360,7 +360,7 @@ def get_news(req: func.HttpRequest) -> func.HttpResponse:
 
         news_container = _get_cosmos_container("newsArticles")
         query = """
-            SELECT 
+            SELECT TOP 200
                 c.title,
                 c.sourceName,
                 c.publishedAt,
@@ -368,8 +368,7 @@ def get_news(req: func.HttpRequest) -> func.HttpResponse:
                 c.sentiment.sentimentScore,
                 c.sentiment.sentimentLabel
             FROM c
-            WHERE c.ticker = 'SOXL' 
-            AND c.publishedAt > '2026-04-10T23:59:59Z'
+            WHERE c.ticker = 'SOXL'
             ORDER BY c.publishedAt DESC
         """
         items = list(
@@ -418,7 +417,7 @@ def get_prices(req: func.HttpRequest) -> func.HttpResponse:
 
         price_container = _get_cosmos_container("priceSnapshots")
         query = """
-            SELECT TOP 500
+            SELECT
                 c.priceTimestamp,
                 c.openPrice,
                 c.highPrice,
@@ -427,6 +426,7 @@ def get_prices(req: func.HttpRequest) -> func.HttpResponse:
                 c.volume
             FROM c
             WHERE c.ticker = 'SOXL'
+                AND c.priceTimestamp > '2026-04-10T23:59:59Z'
             ORDER BY c.priceTimestamp ASC
         """
         items = list(
