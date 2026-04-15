@@ -385,14 +385,14 @@ if not df_price.empty:
     # --- 4. BUILD COMBINED CHART ---
     fig = go.Figure()
 
-    # Price Candlestick (Left Axis)
-    fig.add_trace(go.Candlestick(
+    fig.add_trace(go.Scatter(
         x=df_price["priceTimestamp"],
-        open=df_price["openPrice"],
-        high=df_price["highPrice"],
-        low=df_price["lowPrice"],
-        close=df_price["closePrice"],
-        name="SOXL Price"
+        y=df_price["closePrice"],
+        mode="lines+markers",
+        name="SOXL Price",
+        line=dict(color="#60a5fa", width=2),
+        marker=dict(size=4),
+        connectgaps=True
     ))
 
     # Volume Bar (Bottom Axis)
