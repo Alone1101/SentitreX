@@ -35,14 +35,19 @@ if st.session_state.pending_auth_action == "login":
                 st.session_state.user_token = data.get("token")
                 st.session_state.user_email = st.session_state.pending_email
                 st.success("Login Successful!")
+                
+                # Clear state and rerun to let app.py route to the dashboard
+                st.session_state.pending_auth_action = None
+                st.session_state.auth_busy = False
+                st.rerun()
             else:
                 st.error(f"Login Failed: {response.json().get('error')}")
+                st.session_state.pending_auth_action = None
+                st.session_state.auth_busy = False
         except Exception as e:
             st.error(f"Could not connect to backend: {e}")
-
-    st.session_state.pending_auth_action = None
-    st.session_state.auth_busy = False
-    st.rerun()
+            st.session_state.pending_auth_action = None
+            st.session_state.auth_busy = False
 
 elif st.session_state.pending_auth_action == "register":
     st.session_state.auth_busy = True
@@ -59,14 +64,19 @@ elif st.session_state.pending_auth_action == "register":
             if response.status_code == 201:
                 st.session_state.auth_mode = "login"
                 st.session_state.auth_success_message = "Account created! Please log in."
+                
+                # Clear state and rerun to switch to login view
+                st.session_state.pending_auth_action = None
+                st.session_state.auth_busy = False
+                st.rerun()
             else:
                 st.error(f"Registration Failed: {response.json().get('error')}")
+                st.session_state.pending_auth_action = None
+                st.session_state.auth_busy = False
         except Exception as e:
             st.error(f"Could not connect to backend: {e}")
-
-    st.session_state.pending_auth_action = None
-    st.session_state.auth_busy = False
-    st.rerun()
+            st.session_state.pending_auth_action = None
+            st.session_state.auth_busy = False
 
 st.markdown("""
 <style>
@@ -116,7 +126,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Auth message
-# I never add the failed message, you can add if you want, just change here
 if st.session_state.get("auth_success_message"):
     st.success(st.session_state.auth_success_message)
     del st.session_state["auth_success_message"]
