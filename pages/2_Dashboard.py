@@ -270,6 +270,18 @@ if not df_price.empty:
     )
     df_price = df_price.sort_values(by="priceTimestamp")
 
+    df_price = df_price.set_index("priceTimestamp")
+
+    df_price = df_price.resample("5min").agg({
+        "openPrice": "first",
+        "highPrice": "max",
+        "lowPrice": "min",
+        "closePrice": "last",
+        "volume": "sum"
+    }).dropna()
+
+    df_price = df_price.reset_index()
+
 # --- 7. Headlines ---
 headline_ticker_html = ""
 
