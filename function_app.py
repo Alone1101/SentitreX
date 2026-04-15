@@ -360,7 +360,7 @@ def get_news(req: func.HttpRequest) -> func.HttpResponse:
 
         news_container = _get_cosmos_container("newsArticles")
         query = """
-            SELECT TOP 200
+            SELECT 
                 c.title,
                 c.sourceName,
                 c.publishedAt,
@@ -368,7 +368,8 @@ def get_news(req: func.HttpRequest) -> func.HttpResponse:
                 c.sentiment.sentimentScore,
                 c.sentiment.sentimentLabel
             FROM c
-            WHERE c.ticker = 'SOXL'
+            WHERE c.ticker = 'SOXL' 
+            AND c.publishedAt > '2026-04-10T23:59:59Z'
             ORDER BY c.publishedAt DESC
         """
         items = list(
