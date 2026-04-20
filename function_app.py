@@ -58,13 +58,14 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
         raise ValueError("KEY_VAULT_URL is not configured.")
     
     api_key = secret_client.get_secret("ALPHA-VANTAGE-KEY").value
-    symbol = "SOXL"
+    target_tickers = ["NVDA", "AMD", "AVGO", "TSM", "QCOM"]
+    ticker_query = ",".join(target_tickers)
     
     # Time filter
     # Calculate cutoff for the last 24 hours in Alpha Vantage format: YYYYMMDDTHHMM
     time_limit = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime("%Y%m%dT%H%M")
     
-    url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&time_from={time_limit}&apikey={api_key}"
+    url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={ticker_query}&time_from={time_limit}&apikey={api_key}"
     
     try:
         response = requests.get(url)
@@ -72,17 +73,24 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
         news_items = data.get("feed", [])
         
         if not news_items:
-            logging.warning(f"No fresh news items found for {symbol} in the last 24h.")
+            logging.warning(f"No fresh news items found for the SOXL basket in the last 24h.")
             return
 
         processed_articles = []
         for article in news_items:
+
             # Relevance filter
             ticker_sentiment = article.get("ticker_sentiment", [])
-            relevance = next((float(t.get("relevance_score", 0)) for t in ticker_sentiment if t.get("ticker") == symbol), 0)
 
-            # Skip articles where SOXL is a minor mention
-            if relevance < 0.4:
+            relevance_scores = [
+                float(t.get("relevance_score", 0)) 
+                for t in ticker_sentiment 
+                if t.get("ticker") in target_tickers
+            ]
+            
+            highest_relevance = max(relevance_scores) if relevance_scores else 0
+
+            if highest_relevance < 0.4:
                 continue
 
             # Idempotency & Data integrity
@@ -93,14 +101,14 @@ def sentiment_scraper(mytimer: func.TimerRequest, outputDocument: func.Out[func.
             doc = {
                 "id": safe_id,
                 "articleId": safe_id,
-                "ticker": symbol,
+                "ticker": "SOXL",
                 "sourceName": article.get("source"),
                 "title": article.get("title"),
                 "articleUrl": raw_url,
                 "publishedAt": article.get("time_published"), # Use actual news time for correlation
                 "sentiment": {
                     "sentimentScore": float(article.get("overall_sentiment_score", 0)),
-                    "relevanceScore": relevance,
+                    "relevanceScore": highest_relevance,
                     "sentimentLabel": article.get("overall_sentiment_label"),
                     "sentimentTimestamp": datetime.datetime.utcnow().isoformat()
                 }
