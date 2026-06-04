@@ -7,7 +7,6 @@
 [![GitHub Actions](https://img.shields.io/github/actions/workflow/status/Alone1101/SentitreX/main_sentitrex-api.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD)](https://github.com/Alone1101/SentitreX/actions)
 [![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-![Status: Archive Only](https://img.shields.io/badge/Status-Archive%20Only-red)
 
 *A cloud-native Business Intelligence engine that correlates institutional financial news sentiment with SOXL market volatility — automated, serverless, and live on Azure.*
 
